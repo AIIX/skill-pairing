@@ -52,8 +52,8 @@ class PairingSkill(MycroftSkill):
         self.nato_dict = self.translate_namedvalues('codes')
 
     def not_paired(self, message):
-        self.speak_dialog("pairing.not.paired")
-        self.handle_pairing()
+        self.gui['instructions'] = "I'm connected to the internet and need to be activated. Open your browser and visit home.mycroft.ai to register this device."
+        self.gui.show_page = "pairing.qml"
 
     def handle_pairing(self, message=None):
         if self.is_paired():
@@ -89,9 +89,9 @@ class PairingSkill(MycroftSkill):
                 return
 
             mycroft.audio.wait_while_speaking()
-
+            self.gui['instructions'] = "I'm connected to the internet and need to be activated. Open your browser and visit home.mycroft.ai to register this device."
+            self.gui.show_page("pairing.qml")
             self.speak_dialog("pairing.intro")
-
             self.enclosure.deactivate_mouth_events()
             self.enclosure.mouth_text("home.mycroft.ai      ")
             # HACK this gives the Mark 1 time to scroll the address and
@@ -213,6 +213,8 @@ class PairingSkill(MycroftSkill):
         # Make sure code stays on display
         self.enclosure.deactivate_mouth_events()
         self.enclosure.mouth_text(self.data.get("code"))
+        self.gui['code'] = self.data.get("code")
+        self.gui.show_page("pairing.qml")
         self.speak_dialog("pairing.code", data)
 
     def shutdown(self):
