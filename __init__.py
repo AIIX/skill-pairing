@@ -18,7 +18,7 @@ from uuid import uuid4
 from requests import HTTPError
 
 from adapt.intent import IntentBuilder
-
+from time import sleep
 from mycroft.api import DeviceApi, is_paired, check_remote_pairing
 from mycroft.identity import IdentityManager
 from mycroft.messagebus.message import Message
@@ -54,10 +54,16 @@ class PairingSkill(MycroftSkill):
         self.pairing_performed = False
 
         self.num_failed_codes = 0
+        self.pairing_screen_status = 0
+        self.login = None
 
     def initialize(self):
         self.add_event("mycroft.not.paired", self.not_paired)
         self.nato_dict = self.translate_namedvalues('codes')
+        self.gui.register_handler("mycroft.pairing.kickoff", 
+                                  self.kickoff_pairing)
+        self.gui.register_handler("mycroft.pairing.completed.connected",
+                                  self.kickoff_endscreen)
 
         # If the device isn't paired catch mycroft.ready to report
         # that the device is ready for use.
@@ -91,6 +97,7 @@ class PairingSkill(MycroftSkill):
         if check_remote_pairing(ignore_errors=True):
             # Already paired! Just tell user
             self.speak_dialog("already.paired")
+
         elif not self.data:
             # Kick off pairing...
             with self.counter_lock:
@@ -104,45 +111,10 @@ class PairingSkill(MycroftSkill):
             self.reload_skill = False  # Prevent restart during the process
 
             self.log.debug("Kicking off pairing sequence")
-
-            try:
-                # Obtain a pairing code from the backend
-                self.data = self.api.get_code(self.state)
-
-                # Keep track of when the code was obtained.  The codes expire
-                # after 20 hours.
-                self.time_code_expires = time.monotonic() + 72000  # 20 hours
-            except Exception:
-                time.sleep(10)
-                # Call restart pairing here
-                # Bail out after Five minutes (5 * 6 attempts at 10 seconds
-                # interval)
-                if self.num_failed_codes < 5 * 6:
-                    self.num_failed_codes += 1
-                    self.abort_and_restart(quiet=True)
-                else:
-                    self.end_pairing('connection.error')
-                    self.num_failed_codes = 0
-                return
-
-            self.num_failed_codes = 0  # Reset counter on success
-
             mycroft.audio.wait_while_speaking()
-
-            self.gui.show_page("pairing_start.qml", override_idle=True)
+            self.pairing_screen_status = 1
+            self.gui.show_page("pairing_init.qml", override_idle=True)
             self.speak_dialog("pairing.intro")
-
-            self.enclosure.deactivate_mouth_events()
-            self.enclosure.mouth_text("home.mycroft.ai      ")
-            # HACK this gives the Mark 1 time to scroll the address and
-            # the user time to browse to the website.
-            # TODO: mouth_text() really should take an optional parameter
-            # to not scroll a second time.
-            time.sleep(7)
-            mycroft.audio.wait_while_speaking()
-
-            if not self.activator:
-                self.__create_activator()
 
     def check_for_activate(self):
         """Method is called every 10 seconds by Timer. Checks if user has
@@ -155,7 +127,6 @@ class PairingSkill(MycroftSkill):
 
             token = self.data.get("token")
             login = self.api.activate(self.state, token)  # HTTPError() thrown
-
             # When we get here, the pairing code has been entered on the
             # backend and pairing can now be saved.
             # The following is kinda ugly, but it is really critical that we
@@ -163,11 +134,13 @@ class PairingSkill(MycroftSkill):
             # they have to perform pairing all over again at the website.
             try:
                 IdentityManager.save(login)
+                self.login = login
             except Exception as e:
                 self.log.debug("First save attempt failed: " + repr(e))
                 time.sleep(2)
                 try:
                     IdentityManager.save(login)
+                    self.login = login
                 except Exception as e2:
                     # Something must be seriously wrong
                     self.log.debug("Second save attempt failed: " + repr(e2))
@@ -180,29 +153,10 @@ class PairingSkill(MycroftSkill):
             self.enclosure.activate_mouth_events()  # clears the display
 
             # Notify the system it is paired
-            self.gui.show_page("pairing_done.qml", override_idle=False)
-            self.bus.emit(Message("mycroft.paired", login))
+            # self.gui.show_page("pairing_done.qml", override_idle=False)
+            self.gui.remove_page("pairing.qml")
+            self.gui.show_page("status_connected.qml", override_idle=True)
 
-            self.pairing_performed = True
-            with self.pair_dialog_lock:
-                if self.mycroft_ready:
-                    # Tell user they are now paired
-                    self.speak_dialog(self.paired_dialog)
-                    mycroft.audio.wait_while_speaking()
-                else:
-                    self.speak_dialog("wait.for.startup")
-                    mycroft.audio.wait_while_speaking()
-
-            # Un-mute.  Would have been muted during onboarding for a new
-            # unit, and not dangerous to do if pairing was started
-            # independently.
-            self.bus.emit(Message("mycroft.mic.unmute", None))
-
-            # Send signal to update configuration
-            self.bus.emit(Message("configuration.updated"))
-
-            # Allow this skill to auto-update again
-            self.reload_skill = True
         except HTTPError:
             # speak pairing code every 60th second
             with self.counter_lock:
@@ -223,6 +177,71 @@ class PairingSkill(MycroftSkill):
         except Exception as e:
             self.log.debug("Unexpected error: " + repr(e))
             self.abort_and_restart()
+            
+    def kickoff_pairing(self):
+        self.gui.remove_page("pairing_init.qml")
+        self.pairing_screen_status = 2
+        self.gui.show_page("pairing_start.qml", override_idle=True)
+        sleep(5) # Give screen time to stay before code arrives
+        try:
+            # Obtain a pairing code from the backend
+            self.data = self.api.get_code(self.state)
+
+            # Keep track of when the code was obtained.  The codes expire
+            # after 20 hours.
+            self.time_code_expires = time.monotonic() + 72000  # 20 hours
+        except Exception:
+            time.sleep(10)
+            # Call restart pairing here
+            # Bail out after Five minutes (5 * 6 attempts at 10 seconds
+            # interval)
+            if self.num_failed_codes < 5 * 6:
+                self.num_failed_codes += 1
+                self.abort_and_restart(quiet=True)
+            else:
+                self.end_pairing('connection.error')
+                self.num_failed_codes = 0
+            return
+
+        self.num_failed_codes = 0  # Reset counter on success
+        
+        self.enclosure.deactivate_mouth_events()
+        self.enclosure.mouth_text("home.mycroft.ai      ")
+        # HACK this gives the Mark 1 time to scroll the address and
+        # the user time to browse to the website.
+        # TODO: mouth_text() really should take an optional parameter
+        # to not scroll a second time.
+        time.sleep(7)
+        mycroft.audio.wait_while_speaking()
+
+        if not self.activator:
+            self.__create_activator()
+        
+    def kickoff_endscreen(self):
+        self.gui.remove_page("status_connected.qml")
+        self.gui.show_page("pairing_done.qml", override_idle=False)
+        self.bus.emit(Message("mycroft.paired", self.login))
+
+        self.pairing_performed = True
+        with self.pair_dialog_lock:
+            if self.mycroft_ready:
+                # Tell user they are now paired
+                self.speak_dialog(self.paired_dialog)
+                mycroft.audio.wait_while_speaking()
+            else:
+                self.speak_dialog("wait.for.startup")
+                mycroft.audio.wait_while_speaking()
+
+        # Un-mute.  Would have been muted during onboarding for a new
+        # unit, and not dangerous to do if pairing was started
+        # independently.
+        self.bus.emit(Message("mycroft.mic.unmute", None))
+        
+        # Send signal to update configuration
+        self.bus.emit(Message("configuration.updated"))
+
+        # Allow this skill to auto-update again
+        self.reload_skill = True
 
     def end_pairing(self, error_dialog):
         """Resets the pairing and don't restart it.
@@ -238,6 +257,11 @@ class PairingSkill(MycroftSkill):
 
     def abort_and_restart(self, quiet=False):
         # restart pairing sequence
+        if self.pairing_screen_status == 2:
+            self.gui.remove_page("pairing_start.qml")
+        elif self.pairing_screen_status == 3:
+            self.gui.remove_page("pairing.qml")
+
         self.log.debug("Aborting Pairing")
         self.enclosure.activate_mouth_events()
         if not quiet:
@@ -271,7 +295,9 @@ class PairingSkill(MycroftSkill):
         # Make sure code stays on display
         self.enclosure.deactivate_mouth_events()
         self.enclosure.mouth_text(self.data.get("code"))
+        self.gui.remove_page("pairing_start.qml")
         self.gui['code'] = self.data.get("code")
+        self.pairing_screen_status = 3
         self.gui.show_page("pairing.qml", override_idle=True)
         self.speak_dialog("pairing.code", data)
 

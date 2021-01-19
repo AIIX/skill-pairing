@@ -24,67 +24,72 @@ import Mycroft 1.0 as Mycroft
 
 Mycroft.Delegate {
     id: root
-    property var code: sessionData.code
-
-    ColumnLayout {
+    leftPadding: 0
+    rightPadding: 0
+    bottomPadding: 0
+    topPadding: 0
+    
+    Rectangle {
         anchors.fill: parent
-        
-        Kirigami.Heading {
-            id: hey
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignLeft
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            elide: Text.ElideRight
-            font.family: "Noto Sans"
-            font.bold: true
-            font.weight: Font.Bold
-            font.pixelSize: 70
-            visible: !content.visible
-            color: "#22a7f0"
-            text: "Hey Mycroft"
-        }
-        Kirigami.Heading {
-            id: example1
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignLeft
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            elide: Text.ElideRight
-            font.family: "Noto Sans"
-            font.bold: true
-            font.weight: Font.Bold
-            font.pixelSize: 55
-            visible: !content.visible
-            text: "What's the\nweather?"
-        }
-        Kirigami.Heading {
-            id: example2
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignLeft
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            elide: Text.ElideRight
-            font.family: "Noto Sans"
-            font.bold: true
-            font.weight: Font.Bold
-            font.pixelSize: 55
-            visible: !content.visible
-            text: "Tell me about\nAbraham Lincoln"
-        }
-        Kirigami.Heading {
-            id: example3
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignLeft
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            elide: Text.ElideRight
-            font.family: "Noto Sans"
-            font.bold: true
-            font.weight: Font.Bold
-            font.pixelSize: 55
-            visible: !content.visible
-            text: "Play the News"
+        color: "#000000"
+    
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Kirigami.Units.largeSpacing
+            
+            Kirigami.Heading {
+                id: hey
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignLeft
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                elide: Text.ElideRight
+                font.family: "Noto Sans"
+                font.bold: true
+                font.weight: Font.Bold
+                font.pixelSize: Math.min(root.height * 0.25, 55)
+                color: "#22a7f0"
+                text: "Hey Mycroft"
+            }
+            Kirigami.Heading {
+                id: example1
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignLeft
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                elide: Text.ElideRight
+                font.family: "Noto Sans"
+                font.bold: true
+                font.weight: Font.Bold
+                font.pixelSize: Math.min(root.height * 0.15, 45)
+                text: "What's the weather?"
+            }
+            Kirigami.Heading {
+                id: example2
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignLeft
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                elide: Text.ElideRight
+                font.family: "Noto Sans"
+                font.bold: true
+                font.weight: Font.Bold
+                font.pixelSize: Math.min(root.height * 0.15, 45)
+                text: "Tell me about Abraham Lincoln"
+            }
+            Kirigami.Heading {
+                id: example3
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignLeft
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                elide: Text.ElideRight
+                font.family: "Noto Sans"
+                font.bold: true
+                font.weight: Font.Bold
+                font.pixelSize: Math.min(root.height * 0.15, 45)
+                text: "Play the News"
+            }
         }
     }
 }  
